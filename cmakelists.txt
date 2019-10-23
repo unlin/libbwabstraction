@@ -1,0 +1,70 @@
+cmake_minimum_required(VERSION 3.1)
+project(libbwabstraction)
+
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+
+find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(Boost REQUIRED)
+find_package(OpenMesh REQUIRED)
+find_package(CGAL REQUIRED)
+find_package(GMP REQUIRED)
+find_package(GLEW REQUIRED)
+find_package(GLFW3 REQUIRED)
+find_package(OPENGL REQUIRED)
+
+include_directories(
+    src
+    ${EIGEN3_INCLUDE_DIR}
+    ${CGAL_INCLUDE_DIRS}
+    ${OPENMESH_INCLUDE_DIR}
+    ${GLEW_INCLUDE_PATH}
+    ${GLFW3_INCLUDE_PATH}
+    ${GMP_INCLUDE_DIR}
+    ${OpenCV_INCLUDE_DIRS}
+)
+
+file(GLOB libbwabstraction_src "src/*.cpp")
+add_library(libbwabstraction ${libbwabstraction_src})
+
+add_definitions(-D_USE_MATH_DEFINES)
+
+set(EXE_LINK_LIBS
+    libbwabstraction
+    Eigen3::Eigen
+    CGAL::CGAL
+    ${OpenCV_LIBS}
+    ${Boost_LOG_SETUP_LIBRARY}
+    ${Boost_LOG_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
+    ${OPENMESH_LIBRARIES}
+    ${GMP_LIBRARIES}
+    ${GLEW_LIBRARY}
+    ${GLFW3_LIBRARY}
+    ${OPENGL_LIBRARY}
+)
+
+add_executable(01_basic examples/01_basic.cpp)
+target_link_libraries(01_basic ${EXE_LINK_LIBS})
+
+add_executable(02_rotation examples/02_rotation.cpp)
+target_link_libraries(02_rotation ${EXE_LINK_LIBS})
+
+add_executable(03_multiple_models examples/03_multiple_models.cpp)
+target_link_libraries(03_multiple_models ${EXE_LINK_LIBS})
+
+add_executable(benchmark tools/benchmark.cpp)
+target_link_libraries(benchmark ${EXE_LINK_LIBS})
+
+add_executable(bwa_cli tools/cli.cpp)
+target_link_libraries(bwa_cli ${EXE_LINK_LIBS})
+
+#get_cmake_property(_variableNames VARIABLES)
+#list (SORT _variableNames)
+#foreach (_variableName ${_variableNames})
+#    message(STATUS "${_variableName}=${${_variableName}}")
+#endforeach()
