@@ -48,5 +48,8 @@
     <ClInclude Include="..\src\trimesh.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\shaders\shaders.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

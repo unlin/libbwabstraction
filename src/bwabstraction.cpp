@@ -160,7 +160,8 @@ StandardVertexAttribute CreateVertexAttrFromLines(vector<float> &lines)
 
 BWAbstraction::BWAbstraction() :
     mesh(NULL),
-    glInitialized(false)
+    glInitialized(false),
+    glResourceInitialized(false)
 {
     mesh = new TriMesh();
 }
@@ -874,7 +875,7 @@ void BWAbstraction::ComputeBoundaries()
 
 void BWAbstraction::InitializeGL()
 {
-    if(glInitialized)
+    if(glInitialized || param.useHostOpenGL)
     {
         return;
     }
@@ -920,44 +921,52 @@ void BWAbstraction::InitializeGL()
         fprintf(stdout, "Error: %s\n", glewGetErrorString(err));
     }
 
-    if(param.verbose)
+    if (param.verbose)
     {
         fprintf(stdout, "Using GLEW %s\n", glewGetString(GLEW_VERSION));
         glPrintContextInfo();
     }
 
     glInitialized = true;
+}
+
+void BWAbstraction::InitializeGLResources()
+{
+    if (glResourceInitialized)
+    {
+        return;
+    }
 
     try
     {
         featureLineShader = new StandardShader();
-        #if USE_EMBEDDED_SHADER
+#if USE_EMBEDDED_SHADER
         featureLineShader->Create(
             featureline_vs_glsl,
             featureline_fs_glsl);
-        #else
+#else
         featureLineShader->CreateFromFile(
             "shader/featureline.vs.glsl",
             "shader/featureline.fs.glsl");
-        #endif
+#endif
         triangleIDShader = new StandardShader();
-        #if USE_EMBEDDED_SHADER
+#if USE_EMBEDDED_SHADER
         triangleIDShader->Create(
             triangleid_vs_glsl,
             triangleid_fs_glsl);
-        #else
+#else
         triangleIDShader->CreateFromFile(
             "shader/triangleid.vs.glsl",
             "shader/triangleid.fs.glsl");
-        #endif
+#endif
         if (GLEW_ARB_compute_shader && GLEW_VERSION_4_3)
         {
             hairlineShader = new StandardShader();
-            #if USE_EMBEDDED_SHADER
+#if USE_EMBEDDED_SHADER
             hairlineShader->CreateCompute(bake_hairline_cs_glsl);
-            #else
+#else
             hairlineShader->CreateComputeFromFile("shader/bake_hairline.cs.glsl");
-            #endif
+#endif
         }
     }
     catch (std::invalid_argument ex)
@@ -968,10 +977,10 @@ void BWAbstraction::InitializeGL()
     }
 
     sharpEdgeLineTarget = new INT32DTarget();
-    triangleIDTarget= new INT32DTarget();
-    patchIDTarget= new INT32DTarget();
-    lineMapTarget= new INT32DTarget();
-    outputTarget= new RGBADTarget();
+    triangleIDTarget = new INT32DTarget();
+    patchIDTarget = new INT32DTarget();
+    lineMapTarget = new INT32DTarget();
+    outputTarget = new RGBADTarget();
 
     if (GLEW_ARB_compute_shader && GLEW_VERSION_4_3)
     {
@@ -984,6 +993,8 @@ void BWAbstraction::InitializeGL()
     patchIDTarget->init();
     lineMapTarget->init();
     outputTarget->init();
+
+    glResourceInitialized = true;
 }
 
 Mat BWAbstraction::RenderBWAImage(bwabstraction::Parameters param)
@@ -1085,7 +1096,7 @@ Mat BWAbstraction::RenderBWAImage(bwabstraction::Parameters param)
         // draw lines with radius (GPU)
         patchIDTarget->update(this->patchIDMap);
         lineMapTarget->update(mixedLineMap);
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClearColor(param.backgroundColor[0], param.backgroundColor[1], param.backgroundColor[2], 1.0f);
         outputTarget->bindClear();
 
         glNamedBufferData(labelSSBO, nodeLabel.size() * sizeof(int), nodeLabel.data(), GL_STATIC_DRAW);
@@ -1103,7 +1114,11 @@ Mat BWAbstraction::RenderBWAImage(bwabstraction::Parameters param)
         glBindTexture(GL_TEXTURE_2D, patchIDTarget->color_id_buffer);
         glDispatchCompute(this->param.renderWidth / 8, this->param.renderHeight / 8, 1);
 
-        return outputTarget->readback();
+        Mat output8uc4 = outputTarget->readback();
+        Mat output = Mat(param.renderHeight, param.renderWidth, CV_8UC1);
+        const int from_to[] = { 0,0 };
+        mixChannels(output8uc4, output, from_to, 1);
+        return output;
     }
     else
     {
@@ -1321,11 +1336,12 @@ void BWAbstraction::Render(Result *result, bwabstraction::Parameters param)
     }
 
     InitializeGL();
-    if (!glInitialized)
+    if (!glInitialized && !param.useHostOpenGL)
     {
         cout << "OpenGL initialization failed. Stopping." << endl;
         return;
     }
+    InitializeGLResources();
 
     if (this->param.renderWidth != this->triangleIDMap.cols || this->param.renderHeight != this->triangleIDMap.rows)
     {
@@ -1380,10 +1396,10 @@ void BWAbstraction::Render(Result *result, bwabstraction::Parameters param)
     BeliefPropagationOptimization();
     result->bwaImage = RenderBWAImage(param);
 
-    if(this->param.verbose)
+    if (this->param.verbose)
     {
         timer.Update();
-        cout << "Model Render Count #" << renderCount << endl; 
+        cout << "Model Render Count #" << renderCount << endl;
         cout << "Frame time: " << timer.DeltaTime() << " seconds" << endl;
 
         cout << "Patches: " << patches.size() << endl;
@@ -1392,75 +1408,97 @@ void BWAbstraction::Render(Result *result, bwabstraction::Parameters param)
         cout << "Similarity Sets: " << similaritySets.size() << endl;
         cout << "Inclusion Pairs: " << inclusionPairs.size() << endl;
         cout << "--" << endl;
+    }
 
-        result->consistencyImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
-        for(int sid = 0; sid < similaritySets.size(); ++sid)
+    Scalar backgroundColor = Scalar(
+        static_cast<int>(255.0f * param.backgroundColor[0]),
+        static_cast<int>(255.0f * param.backgroundColor[1]),
+        static_cast<int>(255.0f * param.backgroundColor[2]));
+
+    if (this->param.resultImage & ResultImage::CONSISTENCY)
+    {
+        result->consistencyImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
+        for (int sid = 0; sid < similaritySets.size(); ++sid)
         {
             unsigned char rgb[3];
             GetDistinctColor(sid, rgb);
-            for(auto it = similaritySets[sid].begin(); it != similaritySets[sid].end(); ++it)
+            for (auto it = similaritySets[sid].begin(); it != similaritySets[sid].end(); ++it)
             {
-                for(auto pixel = patches[*it].pixels.begin(); pixel != patches[*it].pixels.end(); ++pixel)
+                for (auto pixel = patches[*it].pixels.begin(); pixel != patches[*it].pixels.end(); ++pixel)
                 {
                     result->consistencyImage.at<Vec3b>(pixel->first, pixel->second) = Vec3b(rgb[0], rgb[1], rgb[2]);
                 }
             }
         }
+    }
 
-        result->patchImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
+    if (this->param.resultImage & ResultImage::PATCH)
+    {
+        result->patchImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
         int pid = 0;
-        for(auto pit = patches.begin(); pit != patches.end(); ++pit)
+        for (auto pit = patches.begin(); pit != patches.end(); ++pit)
         {
             unsigned char rgb[3];
             GetDistinctColor(pid, rgb);
-            for(auto it = pit->pixels.begin(); it != pit->pixels.end(); ++it)
+            for (auto it = pit->pixels.begin(); it != pit->pixels.end(); ++it)
             {
                 result->patchImage.at<Vec3b>(it->first, it->second) = Vec3b(rgb[0], rgb[1], rgb[2]);
             }
             ++pid;
         }
+    }
 
-        result->boundaryImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
+    if (this->param.resultImage & ResultImage::BOUNDARY)
+    {
+        result->boundaryImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
         int bid = 0;
-        for(auto bit = boundaries.begin(); bit != boundaries.end(); ++bit)
+        for (auto bit = boundaries.begin(); bit != boundaries.end(); ++bit)
         {
             unsigned char rgb[3];
             int pid = bit->votes[0] > bit->votes[1] ? bit->patchIDs[0] : bit->patchIDs[1];
             GetDistinctColor(pid, rgb);
             vector<pair<int, int> > &pixels = bit->votes[0] > bit->votes[1] ? bit->pixels[0] : bit->pixels[1];
-            for(auto it = pixels.begin(); it != pixels.end(); ++it)
+            for (auto it = pixels.begin(); it != pixels.end(); ++it)
             {
                 result->boundaryImage.at<Vec3b>(it->first, it->second) = Vec3b(rgb[0], rgb[1], rgb[2]);
             }
             ++bid;
         }
+    }
 
-        result->depthCriticalLineImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
-        result->sharpEdgeLineImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
+    if (this->param.resultImage & ResultImage::DEPTH_CRITICAL)
+    {
+        result->depthCriticalLineImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
         for (int row = 0; row < param.renderHeight; ++row)
         {
             for (int col = 0; col < param.renderWidth; ++col)
             {
-                if (this->sharpEdgeLineMap.at<int>(row, col) == -1)
-                {
-                    result->sharpEdgeLineImage.at<Vec3b>(row, col) = Vec3b(255, 255, 255);
-                }
-                else if (this->sharpEdgeLineMap.at<int>(row, col) == 1)
-                {
-                    result->sharpEdgeLineImage.at<Vec3b>(row, col) = Vec3b(0, 0, 0);
-                }
-                if (this->depthCritLineMap.at<char>(row, col) == -1)
-                {
-                    result->depthCriticalLineImage.at<Vec3b>(row, col) = Vec3b(255, 255, 255);
-                }
-                else if (this->depthCritLineMap.at<char>(row, col) == 1)
+                if (this->depthCritLineMap.at<char>(row, col) == 1)
                 {
                     result->depthCriticalLineImage.at<Vec3b>(row, col) = Vec3b(0, 0, 0);
                 }
             }
         }
+    }
 
-        result->featureLineImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
+    if (this->param.resultImage & ResultImage::SHARP_EDGE)
+    {
+        result->sharpEdgeLineImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
+        for (int row = 0; row < param.renderHeight; ++row)
+        {
+            for (int col = 0; col < param.renderWidth; ++col)
+            {
+                if (this->sharpEdgeLineMap.at<int>(row, col) == 1)
+                {
+                    result->sharpEdgeLineImage.at<Vec3b>(row, col) = Vec3b(0, 0, 0);
+                }
+            }
+        }
+    }
+
+    if (this->param.resultImage & ResultImage::FEATURE_LINE)
+    {
+        result->featureLineImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
         int fid = 0;
         for (auto fit = featureLines.begin(); fit != featureLines.end(); ++fit)
         {
@@ -1472,8 +1510,11 @@ void BWAbstraction::Render(Result *result, bwabstraction::Parameters param)
             }
             ++fid;
         }
+    }
 
-        result->distanceTransformImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
+    if (this->param.resultImage & ResultImage::DISTANCE_TRANSFORM)
+    {
+        result->distanceTransformImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
         for (int row = 0; row < param.renderHeight; ++row)
         {
             for (int col = 0; col < param.renderWidth; ++col)
@@ -1482,9 +1523,12 @@ void BWAbstraction::Render(Result *result, bwabstraction::Parameters param)
                 result->distanceTransformImage.at<Vec3b>(row, col) = Vec3b(val, val, val);
             }
         }
+    }
 
-        result->componentImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
-        for(auto pit = surfacePixels.begin(); pit != surfacePixels.end(); ++pit)
+    if (this->param.resultImage & ResultImage::COMPONENT)
+    {
+        result->componentImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
+        for (auto pit = surfacePixels.begin(); pit != surfacePixels.end(); ++pit)
         {
             int row = pit->first;
             int col = pit->second;
@@ -1494,9 +1538,12 @@ void BWAbstraction::Render(Result *result, bwabstraction::Parameters param)
             GetDistinctColor(componentID, rgb);
             result->componentImage.at<Vec3b>(row, col) = Vec3b(rgb[0], rgb[1], rgb[2]);
         }
+    }
 
-        result->inclusionImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, Scalar(255, 255, 255));
-        pid = 0;
+    if (this->param.resultImage & ResultImage::INCLUSION)
+    {
+        result->inclusionImage = Mat(param.renderHeight, param.renderWidth, CV_8UC3, backgroundColor);
+        int pid = 0;
         for(auto pit = patches.begin(); pit != patches.end(); ++pit)
         {
             unsigned char rgb[3];

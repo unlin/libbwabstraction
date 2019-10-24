@@ -30,6 +30,7 @@
     <ClInclude Include="..\src\mesh_segmentation.hpp" />
     <ClInclude Include="..\src\mymesh.hpp" />
     <ClInclude Include="..\src\rendertarget.hpp" />
+    <ClInclude Include="..\src\shaders\shaders.hpp" />
     <ClInclude Include="..\src\standardshader.hpp" />
     <ClInclude Include="..\src\timer.hpp" />
     <ClInclude Include="..\src\trimesh.hpp" />

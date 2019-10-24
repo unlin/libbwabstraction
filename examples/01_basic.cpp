@@ -23,6 +23,8 @@ int main(void)
     param.verbose = true;
     param.renderWidth = 1600;
     param.renderHeight = 1200;
+    param.resultImage = bwabstraction::ResultImage::ALL;
+    param.backgroundColor[0] = param.backgroundColor[1] = param.backgroundColor[2] = 1.0f; // white background
 
     // LoadMVPMatrixFromFile() is a helper function that fills param.mvpMatrix
     // with a text file of 16 real numbers. you can populate param.mvpMatrix any way you like.
@@ -46,16 +48,16 @@ int main(void)
     bwa.Render(&result, param);
 
     // save images returned.
-    cv::imwrite("patches.png", result.patchImage);
-    cv::imwrite("depthcritical.png", result.depthCriticalLineImage);
-    cv::imwrite("sharpedge.png", result.sharpEdgeLineImage);
-    cv::imwrite("boundaries.png", result.boundaryImage);
-    cv::imwrite("featureline.png", result.featureLineImage);
-    cv::imwrite("disttransform.png", result.distanceTransformImage);
-    cv::imwrite("consistency.png", result.consistencyImage);
-    cv::imwrite("components.png", result.componentImage);
-    cv::imwrite("inclusions.png", result.inclusionImage);
-    cv::imwrite("bwaResult.png", result.bwaImage);
+    cv::imwrite("patches.png", result.patchImage); // type: CV_8UC3
+    cv::imwrite("depthcritical.png", result.depthCriticalLineImage); // type: CV_8UC3
+    cv::imwrite("sharpedge.png", result.sharpEdgeLineImage); // type: CV_8UC3
+    cv::imwrite("boundaries.png", result.boundaryImage); // type: CV_8UC3
+    cv::imwrite("featureline.png", result.featureLineImage); // type: CV_8UC3
+    cv::imwrite("disttransform.png", result.distanceTransformImage); // type: CV_8UC3
+    cv::imwrite("consistency.png", result.consistencyImage); // type: CV_8UC3
+    cv::imwrite("components.png", result.componentImage); // type: CV_8UC3
+    cv::imwrite("inclusions.png", result.inclusionImage); // type: CV_8UC3
+    cv::imwrite("bwaResult.png", result.bwaImage); // type: CV_8UC1, different!
 
     #ifdef _MSC_VER
     system("PAUSE");

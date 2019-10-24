@@ -1,6 +1,5 @@
 #ifndef BWABSTRACTION_H
 #define BWABSTRACTION_H
-#endif
 
 #ifdef _MSC_VER
 #define _USE_MATH_DEFINES
@@ -40,6 +39,22 @@ namespace bwabstraction {
 
 class TriMesh;
 
+// bitfield
+enum ResultImage
+{
+    BWA = 1,
+    PATCH = 1 << 1,
+    DEPTH_CRITICAL = 1 << 2,
+    SHARP_EDGE = 1 << 3,
+    BOUNDARY = 1 << 4,
+    FEATURE_LINE = 1 << 5,
+    DISTANCE_TRANSFORM = 1 << 6,
+    CONSISTENCY = 1 << 7,
+    COMPONENT = 1 << 8,
+    INCLUSION = 1 << 9,
+    ALL = (1 << 10) - 1,
+};
+
 typedef struct _Parameters
 {
 
@@ -54,11 +69,14 @@ typedef struct _Parameters
     float congruentThreshold;
     int patchSizeThreshold;
 
+    bool useHostOpenGL;
     bool verbose;
     int renderWidth;
     int renderHeight;
+    int resultImage;
 
     float mvpMatrix[16];
+    float backgroundColor[3];
 
     _Parameters()
     {
@@ -76,7 +94,12 @@ typedef struct _Parameters
         congruentThreshold = 0.005f;
         patchSizeThreshold = 30;
 
+        useHostOpenGL = false;
         verbose = false;
+
+        resultImage += ResultImage::BWA;
+
+        backgroundColor[0] = backgroundColor[1] = backgroundColor[2] = 1.0f;
     }
 
     void LoadMVPMatrixFromFile(std::string file);
@@ -246,10 +269,12 @@ private:
 
     // other utility functions
     void InitializeGL(void);
+    void InitializeGLResources(void);
     void AddPixelToBoundary(int row, int col, int pid2, float depth2);
 
     GLFWwindow* glWindow;
     bool glInitialized;
+    bool glResourceInitialized;
     TriMesh* mesh;
     OpenMesh::FPropHandleT<unsigned int> meshFPropComponentID;
     Parameters param;
@@ -318,3 +343,5 @@ private:
 }; // class BWAbstraction
 
 } // namespace bwabstraction
+
+#endif // BWABSTRACTION_H
