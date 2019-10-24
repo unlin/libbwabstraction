@@ -28,6 +28,11 @@ include_directories(
 
 file(GLOB libbwabstraction_src "src/*.cpp")
 add_library(libbwabstraction ${libbwabstraction_src})
+set_target_properties(libbwabstraction PROPERTIES PUBLIC_HEADER "src/bwabstraction.hpp")
+install(TARGETS libbwabstraction
+	LIBRARY DESTINATION lib/
+	PUBLIC_HEADER DESTINATION include/
+)
 
 add_definitions(-D_USE_MATH_DEFINES)
 
