@@ -62,3 +62,19 @@ Use the Visual Studio 2015 solution `/vc14/libbwabstraction.sln`. Two configurat
 
 #### MacOSX
 Use [CMake](https://cmake.org/) to build the provided `/cmakelist.txt`. For the Qt GUI application, use the Qt project `/tools/qtgui/qtgui.pro`.
+
+## Citation 
+If you use this code for your research, please cite this paper:
+```
+@article{Lin:2018:SBA:,
+ author = {Lin, You-En and Yang, Yong-Liang and Chu, Hung-Kuo},
+ title = {Scale-aware Black-and-white Abstraction of 3D Shapes},
+ journal = {ACM Trans. Graph.},
+ volume = {37},
+ number = {4},
+ year = {2018},
+ pages = {117:1--117:11},
+ articleno = {117},
+ numpages = {11}
+}
+```
